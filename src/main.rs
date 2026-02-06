@@ -1,11 +1,12 @@
 mod client;
+mod protocol;
 mod server;
 
 use crate::client::client;
 use crate::server::server;
 use std::env;
 
-enum InstanceType {
+enum LaunchType {
     Server,
     Client,
 }
@@ -14,17 +15,19 @@ fn main() {
     let mut args = env::args();
     let _program = args.next();
 
-    let instance: InstanceType;
+    let launch: LaunchType;
     if let Some(a) = args.next()
         && a.as_str().eq("client")
     {
-        instance = InstanceType::Client;
+        println!("Launching as client");
+        launch = LaunchType::Client;
     } else {
-        instance = InstanceType::Server;
+        println!("Launching as server");
+        launch = LaunchType::Server;
     }
 
-    match instance {
-        InstanceType::Server => server(),
-        InstanceType::Client => client(),
+    match launch {
+        LaunchType::Server => server(),
+        LaunchType::Client => client(),
     }
 }

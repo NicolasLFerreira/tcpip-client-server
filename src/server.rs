@@ -1,4 +1,6 @@
-use std::io::{Read, Write};
+use crate::protocol::{recv_message, send_message, Message, MessageType};
+use rand::rngs::ThreadRng;
+use rand::RngExt;
 use std::net::{TcpListener, TcpStream};
 use std::thread;
 
@@ -9,40 +11,66 @@ pub fn server() {
         match stream {
             Ok(stream) => {
                 // Log connection
-                println!("Connected");
+                println!("New connection:");
                 let source = stream.peer_addr().unwrap();
                 let ip = source.ip();
                 let s = source.port();
                 println!("{ip}:{s}");
 
-                let thread_join_handle = thread::spawn(move || {
+                // connection's own thread
+                thread::spawn(move || {
                     handle_connection(stream);
                 });
             }
             Err(e) => {
-                eprintln!("Connection failed, {e}");
+                eprintln!("Connection failed: {e}");
             }
         }
     }
 }
 
 fn handle_connection(mut stream: TcpStream) {
-    // Send to client
-    let source_port = stream.peer_addr().unwrap().port();
-    let mut write_buffer: [u8; 1024] = [0; 1024];
-    write_buffer[0] = 0b0000_0011;
-    write_buffer[1] = 0b0000_1100;
-    write_buffer[2] = 0b0011_0000;
-    write_buffer[3] = 0b1100_0000;
-    stream.write(&write_buffer).unwrap();
+    // Start calculation on client side
+    send_message(
+        &mut stream,
+        Message::new(MessageType::CalculationStart, vec![]),
+    );
 
-    let mut read_buffer: [u8; 4] = [0; 4];
+    // send numbers
+    let mut rng = ThreadRng::default();
+    let count = rng.random_range(2..10);
+    for _ in 0..count {
+        let num = rng.random::<u32>();
+        let payload = num.to_be_bytes().to_vec();
 
-    stream.read_exact(&mut read_buffer).unwrap();
-
-    for c in read_buffer {
-        println!("{c}");
+        send_message(
+            &mut stream,
+            Message::new(MessageType::CalculationNumber, payload),
+        )
     }
 
-    println!("Closing for {source_port}");
+    // finish calculation
+    send_message(
+        &mut stream,
+        Message::new(MessageType::CalculationEnd, vec![]),
+    );
+
+    let result = recv_message(&mut stream);
+    if let Some(msg) = result {
+        match msg.msg_type {
+            MessageType::CalculationSubmission => {
+                let payload = msg.payload;
+                let bytes: [u8; 8] = payload[..8].try_into().expect("Must contain 8 bytes");
+                let submission = u64::from_be_bytes(bytes);
+
+                println!("Given calculation results: {submission}");
+            }
+            _ => {
+                eprintln!(
+                    "Message type not implemented to be listened on the server: {}",
+                    msg.msg_type
+                )
+            }
+        }
+    }
 }
