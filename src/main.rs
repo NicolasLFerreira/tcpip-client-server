@@ -12,6 +12,7 @@ enum LaunchType {
 }
 
 fn main() {
+    // handles url
     let mut args = env::args();
     let _program = args.next();
 
